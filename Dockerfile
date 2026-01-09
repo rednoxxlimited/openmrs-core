@@ -1,17 +1,13 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1.3
 
-#	This Source Code Form is subject to the terms of the Mozilla Public License, 
-#	v. 2.0. If a copy of the MPL was not distributed with this file, You can 
-#	obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under 
-#	the terms of the Healthcare Disclaimer located at http://openmrs.org/license.
-#	
-#	Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS 
-#	graphic logo is a trademark of OpenMRS Inc.
+# OpenMRS Core with Modules
+# This Dockerfile builds openmrs-core and includes essential modules
+
 ARG BUILDPLATFORM
 ARG DEV_JDK=eclipse-temurin-21
 ARG RUNTIME_JDK=jdk21-temurin
 
-### Compile Stage (platform-agnostic)
+### Compile Stage
 FROM --platform=$BUILDPLATFORM maven:3.9-$DEV_JDK AS compile
 
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
@@ -46,59 +42,54 @@ ARG MVN_ARGS='clean install -DskipTests'
 
 RUN mvn $MVN_SETTINGS $MVN_ARGS
 
+
 ### Download Modules Stage
 FROM alpine:3.19 AS modules
 
-RUN apk add --no-cache curl
+RUN apk add --no-cache curl unzip
 
 WORKDIR /modules
 
-# Download all required modules for OpenMRS 3.x Reference Application
-RUN curl -fSL -o webservices.rest-2.44.0.omod \
-      "https://modules.openmrs.org/modulus/api/releases/2792/download/webservices.rest-2.44.0.omod" && \
-    curl -fSL -o fhir2-2.4.0.omod \
-      "https://modules.openmrs.org/modulus/api/releases/2808/download/fhir2-2.4.0.omod" && \
-    curl -fSL -o spa-1.0.13.omod \
-      "https://modules.openmrs.org/modulus/api/releases/2752/download/spa-1.0.13.omod" && \
-    curl -fSL -o initializer-2.8.0.omod \
-      "https://modules.openmrs.org/modulus/api/releases/2800/download/initializer-2.8.0.omod" && \
+# Download modules from GitHub releases with verification
+RUN set -ex && \
+    echo "Downloading webservices.rest..." && \
+    curl -fSL -o webservices.rest-2.44.0.omod \
+      "https://github.com/openmrs/openmrs-module-webservices.rest/releases/download/2.44.0/webservices.rest-2.44.0.omod" && \
+    unzip -t webservices.rest-2.44.0.omod && \
+    \
+    echo "Downloading fhir2..." && \
+    curl -fSL -o fhir2-2.2.0.omod \
+      "https://github.com/openmrs/openmrs-module-fhir2/releases/download/2.2.0/fhir2-2.2.0.omod" && \
+    unzip -t fhir2-2.2.0.omod && \
+    \
+    echo "Downloading spa..." && \
+    curl -fSL -o spa-1.0.11.omod \
+      "https://github.com/openmrs/openmrs-module-spa/releases/download/1.0.11/spa-1.0.11.omod" && \
+    unzip -t spa-1.0.11.omod && \
+    \
+    echo "Downloading initializer..." && \
+    curl -fSL -o initializer-2.7.0.omod \
+      "https://github.com/mekomsolutions/openmrs-module-initializer/releases/download/2.7.0/initializer-2.7.0.omod" && \
+    unzip -t initializer-2.7.0.omod && \
+    \
+    echo "Downloading idgen..." && \
     curl -fSL -o idgen-4.10.0.omod \
-      "https://modules.openmrs.org/modulus/api/releases/2720/download/idgen-4.10.0.omod" && \
+      "https://github.com/openmrs/openmrs-module-idgen/releases/download/4.10.0/idgen-4.10.0.omod" && \
+    unzip -t idgen-4.10.0.omod && \
+    \
+    echo "Downloading legacyui..." && \
     curl -fSL -o legacyui-1.16.0.omod \
-      "https://modules.openmrs.org/modulus/api/releases/2712/download/legacyui-1.16.0.omod" && \
-    curl -fSL -o addresshierarchy-2.18.0.omod \
-      "https://modules.openmrs.org/modulus/api/releases/2750/download/addresshierarchy-2.18.0.omod" && \
-    curl -fSL -o appframework-2.17.0.omod \
-      "https://modules.openmrs.org/modulus/api/releases/2660/download/appframework-2.17.0.omod" && \
-    curl -fSL -o uiframework-3.24.0.omod \
-      "https://modules.openmrs.org/modulus/api/releases/2648/download/uiframework-3.24.0.omod" && \
-    curl -fSL -o appui-1.18.0.omod \
-      "https://modules.openmrs.org/modulus/api/releases/2726/download/appui-1.18.0.omod" && \
-    curl -fSL -o metadatadeploy-1.14.0.omod \
-      "https://modules.openmrs.org/modulus/api/releases/2654/download/metadatadeploy-1.14.0.omod" && \
-    curl -fSL -o metadatasharing-1.9.0.omod \
-      "https://modules.openmrs.org/modulus/api/releases/2630/download/metadatasharing-1.9.0.omod" && \
-    curl -fSL -o metadatamapping-1.6.0.omod \
-      "https://modules.openmrs.org/modulus/api/releases/2612/download/metadatamapping-1.6.0.omod" && \
+      "https://github.com/openmrs/openmrs-module-legacyui/releases/download/1.16.0/legacyui-1.16.0.omod" && \
+    unzip -t legacyui-1.16.0.omod && \
+    \
+    echo "Downloading event..." && \
     curl -fSL -o event-2.11.0.omod \
-      "https://modules.openmrs.org/modulus/api/releases/2632/download/event-2.11.0.omod" && \
-    curl -fSL -o emrapi-2.1.0.omod \
-      "https://modules.openmrs.org/modulus/api/releases/2806/download/emrapi-2.1.0.omod" && \
-    curl -fSL -o reporting-1.27.0.omod \
-      "https://modules.openmrs.org/modulus/api/releases/2784/download/reporting-1.27.0.omod" && \
-    curl -fSL -o calculation-1.3.0.omod \
-      "https://modules.openmrs.org/modulus/api/releases/2410/download/calculation-1.3.0.omod" && \
-    curl -fSL -o serialization.xstream-0.2.16.omod \
-      "https://modules.openmrs.org/modulus/api/releases/2544/download/serialization.xstream-0.2.16.omod" && \
-    curl -fSL -o providermanagement-1.0.0.omod \
-      "https://modules.openmrs.org/modulus/api/releases/2432/download/providermanagement-1.0.0.omod" && \
-    curl -fSL -o uicommons-2.26.0.omod \
-      "https://modules.openmrs.org/modulus/api/releases/2716/download/uicommons-2.26.0.omod" && \
-    curl -fSL -o htmlformentry-5.4.0.omod \
-      "https://modules.openmrs.org/modulus/api/releases/2810/download/htmlformentry-5.4.0.omod" && \
-    curl -fSL -o htmlformentryui-2.5.0.omod \
-      "https://modules.openmrs.org/modulus/api/releases/2722/download/htmlformentryui-2.5.0.omod" && \
+      "https://github.com/openmrs/openmrs-module-event/releases/download/2.11.0/event-2.11.0.omod" && \
+    unzip -t event-2.11.0.omod && \
+    \
+    echo "=== All modules downloaded ===" && \
     ls -la /modules/
+
 
 ### Development Stage
 FROM maven:3.9-$DEV_JDK AS dev
@@ -141,6 +132,7 @@ ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/mvn-entrypoint.sh"]
 
 CMD ["/openmrs/startup-dev.sh"]
 
+
 ### Production Stage
 FROM tomcat:11-$RUNTIME_JDK
 
@@ -170,7 +162,7 @@ RUN mkdir -p /openmrs/data/modules \
     && mkdir -p /openmrs/data/activemq-data \
     && chmod -R g+rw /openmrs
 
-# Copy in the start-up scripts
+# Copy startup scripts
 COPY --from=dev /openmrs/wait-for-it.sh /openmrs/startup-init.sh /openmrs/startup.sh /openmrs/
 RUN chmod g+x /openmrs/wait-for-it.sh && chmod g+x /openmrs/startup-init.sh && chmod g+x /openmrs/startup.sh
 
@@ -179,8 +171,11 @@ WORKDIR /openmrs
 COPY --from=dev /openmrs_core/LICENSE LICENSE
 COPY --from=dev /openmrs/distribution/openmrs_core/openmrs.war /openmrs/distribution/openmrs_core/openmrs.war
 
-# Copy modules from the modules stage
+# Copy modules from modules stage
 COPY --from=modules /modules/*.omod /openmrs/data/modules/
+
+# Verify modules were copied
+RUN ls -la /openmrs/data/modules/
 
 EXPOSE 8080
 
