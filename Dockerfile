@@ -4,7 +4,7 @@
 ARG DEV_JDK=eclipse-temurin-21
 ARG RUNTIME_JDK=jdk21-temurin
 
-### Compile Stage (removed --platform flag)
+### Compile Stage
 FROM maven:3.9-${DEV_JDK} AS compile
 
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
@@ -40,52 +40,118 @@ ARG MVN_ARGS='clean install -DskipTests'
 RUN mvn $MVN_SETTINGS $MVN_ARGS
 
 
-### Download Modules Stage
-FROM alpine:3.19 AS modules
-
-RUN apk add --no-cache curl unzip
+### Download Modules Stage - Using Maven
+FROM maven:3.9-eclipse-temurin-21 AS modules
 
 WORKDIR /modules
 
-# Download modules from GitHub releases with verification
-RUN set -ex && \
-    echo "Downloading webservices.rest..." && \
-    curl -fSL -o webservices.rest-2.44.0.omod \
-      "https://github.com/openmrs/openmrs-module-webservices.rest/releases/download/2.44.0/webservices.rest-2.44.0.omod" && \
-    unzip -t webservices.rest-2.44.0.omod && \
-    \
-    echo "Downloading fhir2..." && \
-    curl -fSL -o fhir2-2.2.0.omod \
-      "https://github.com/openmrs/openmrs-module-fhir2/releases/download/2.2.0/fhir2-2.2.0.omod" && \
-    unzip -t fhir2-2.2.0.omod && \
-    \
-    echo "Downloading spa..." && \
-    curl -fSL -o spa-1.0.11.omod \
-      "https://github.com/openmrs/openmrs-module-spa/releases/download/1.0.11/spa-1.0.11.omod" && \
-    unzip -t spa-1.0.11.omod && \
-    \
-    echo "Downloading initializer..." && \
-    curl -fSL -o initializer-2.7.0.omod \
-      "https://github.com/mekomsolutions/openmrs-module-initializer/releases/download/2.7.0/initializer-2.7.0.omod" && \
-    unzip -t initializer-2.7.0.omod && \
-    \
-    echo "Downloading idgen..." && \
-    curl -fSL -o idgen-4.10.0.omod \
-      "https://github.com/openmrs/openmrs-module-idgen/releases/download/4.10.0/idgen-4.10.0.omod" && \
-    unzip -t idgen-4.10.0.omod && \
-    \
-    echo "Downloading legacyui..." && \
-    curl -fSL -o legacyui-1.16.0.omod \
-      "https://github.com/openmrs/openmrs-module-legacyui/releases/download/1.16.0/legacyui-1.16.0.omod" && \
-    unzip -t legacyui-1.16.0.omod && \
-    \
-    echo "Downloading event..." && \
-    curl -fSL -o event-2.11.0.omod \
-      "https://github.com/openmrs/openmrs-module-event/releases/download/2.11.0/event-2.11.0.omod" && \
-    unzip -t event-2.11.0.omod && \
-    \
-    echo "=== All modules downloaded ===" && \
-    ls -la /modules/
+# Create a pom.xml to download modules from OpenMRS Maven repository
+RUN cat > pom.xml << 'POMEOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>org.openmrs.distro</groupId>
+    <artifactId>module-downloader</artifactId>
+    <version>1.0.0</version>
+    <packaging>pom</packaging>
+
+    <repositories>
+        <repository>
+            <id>openmrs-repo</id>
+            <name>OpenMRS Nexus Repository</name>
+            <url>https://mavenrepo.openmrs.org/nexus/content/repositories/public</url>
+        </repository>
+        <repository>
+            <id>openmrs-repo-modules</id>
+            <name>OpenMRS Modules</name>
+            <url>https://mavenrepo.openmrs.org/nexus/content/repositories/modules/</url>
+        </repository>
+        <repository>
+            <id>openmrs-repo-snapshots</id>
+            <name>OpenMRS Snapshots</name>
+            <url>https://mavenrepo.openmrs.org/nexus/content/repositories/snapshots</url>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+
+    <dependencies>
+        <!-- Web Services REST Module -->
+        <dependency>
+            <groupId>org.openmrs.module</groupId>
+            <artifactId>webservices.rest-omod</artifactId>
+            <version>2.44.0</version>
+            <type>jar</type>
+        </dependency>
+        <!-- FHIR2 Module -->
+        <dependency>
+            <groupId>org.openmrs.module</groupId>
+            <artifactId>fhir2-omod</artifactId>
+            <version>2.2.0</version>
+            <type>jar</type>
+        </dependency>
+        <!-- SPA Module -->
+        <dependency>
+            <groupId>org.openmrs.module</groupId>
+            <artifactId>spa-omod</artifactId>
+            <version>1.0.11</version>
+            <type>jar</type>
+        </dependency>
+        <!-- Initializer Module -->
+        <dependency>
+            <groupId>org.openmrs.module</groupId>
+            <artifactId>initializer-omod</artifactId>
+            <version>2.7.0</version>
+            <type>jar</type>
+        </dependency>
+        <!-- ID Gen Module -->
+        <dependency>
+            <groupId>org.openmrs.module</groupId>
+            <artifactId>idgen-omod</artifactId>
+            <version>4.10.0</version>
+            <type>jar</type>
+        </dependency>
+        <!-- Legacy UI Module -->
+        <dependency>
+            <groupId>org.openmrs.module</groupId>
+            <artifactId>legacyui-omod</artifactId>
+            <version>1.16.0</version>
+            <type>jar</type>
+        </dependency>
+        <!-- Event Module -->
+        <dependency>
+            <groupId>org.openmrs.module</groupId>
+            <artifactId>event-omod</artifactId>
+            <version>2.11.0</version>
+            <type>jar</type>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.6.1</version>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+POMEOF
+
+# Download modules using Maven dependency plugin
+RUN mvn dependency:copy-dependencies -DoutputDirectory=/modules/omod -Dmdep.useRepositoryLayout=false -Dmdep.copyPom=false
+
+# Rename .jar to .omod
+RUN cd /modules/omod && \
+    for f in *.jar; do \
+      newname=$(echo "$f" | sed 's/-omod-/-/' | sed 's/\.jar$/.omod/'); \
+      mv "$f" "$newname"; \
+    done && \
+    ls -la /modules/omod/
 
 
 ### Development Stage
@@ -169,7 +235,7 @@ COPY --from=dev /openmrs_core/LICENSE LICENSE
 COPY --from=dev /openmrs/distribution/openmrs_core/openmrs.war /openmrs/distribution/openmrs_core/openmrs.war
 
 # Copy modules from modules stage
-COPY --from=modules /modules/*.omod /openmrs/data/modules/
+COPY --from=modules /modules/omod/*.omod /openmrs/data/modules/
 
 # Verify modules were copied
 RUN ls -la /openmrs/data/modules/
