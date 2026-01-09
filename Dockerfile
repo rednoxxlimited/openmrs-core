@@ -1,14 +1,11 @@
 # syntax=docker/dockerfile:1.3
 
 # OpenMRS Core with Modules
-# This Dockerfile builds openmrs-core and includes essential modules
-
-ARG BUILDPLATFORM
 ARG DEV_JDK=eclipse-temurin-21
 ARG RUNTIME_JDK=jdk21-temurin
 
-### Compile Stage
-FROM --platform=$BUILDPLATFORM maven:3.9-$DEV_JDK AS compile
+### Compile Stage (removed --platform flag)
+FROM maven:3.9-${DEV_JDK} AS compile
 
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
@@ -92,11 +89,11 @@ RUN set -ex && \
 
 
 ### Development Stage
-FROM maven:3.9-$DEV_JDK AS dev
+FROM maven:3.9-${DEV_JDK} AS dev
 
-RUN apt-get update && apt-get install -y tar gzip git && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y tar gzip git curl && rm -rf /var/lib/apt/lists/*
 
-ARG TARGETARCH
+ARG TARGETARCH=amd64
 ARG TINI_VERSION=v0.19.0
 ARG TINI_URL="https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini"
 ARG TINI_SHA="93dcc18adc78c65a028a84799ecf8ad40c936fdfc5f2a57b1acda5a8117fa82c"
@@ -134,11 +131,11 @@ CMD ["/openmrs/startup-dev.sh"]
 
 
 ### Production Stage
-FROM tomcat:11-$RUNTIME_JDK
+FROM tomcat:11-${RUNTIME_JDK}
 
 RUN apt-get update && rm -rf /var/lib/apt/lists/* && rm -rf /usr/local/tomcat/webapps/*
 
-ARG TARGETARCH
+ARG TARGETARCH=amd64
 ARG TINI_VERSION=v0.19.0
 ARG TINI_URL="https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini"
 ARG TINI_SHA="93dcc18adc78c65a028a84799ecf8ad40c936fdfc5f2a57b1acda5a8117fa82c"
